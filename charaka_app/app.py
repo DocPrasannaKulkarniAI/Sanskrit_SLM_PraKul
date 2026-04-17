@@ -187,6 +187,9 @@ def render_file_upload_tab() -> str | None:
             key=f"excel_col_{uploaded.name}",
         )
         lines, _ = extract_from_excel(file_bytes, column=chosen)
+        if lines:
+            st.success(f"✓ Extracted **{len(lines)} row(s)** from column '{chosen}'. "
+                       f"All will be processed and appear as separate rows in your Excel output.")
         return '\n'.join(lines) if lines else None
 
     # Everything else: extract directly
@@ -257,7 +260,14 @@ def render_image_upload_tab() -> str | None:
 # Review step — let user edit extracted text
 # ---------------------------------------------------------------------------
 def render_review_step(extracted: str) -> str | None:
-    """Show extracted text in an editable box. Returns the (possibly edited) text."""
+    """Show extracted text in an editable box. Returns the (possibly edited) text.
+
+    BUGFIX: the textarea's key is derived from a hash of the extracted text,
+    so when the user uploads a new file (Excel/PDF/image), the widget state
+    RESETS instead of persisting the previous input. Without this, uploading
+    a multi-row Excel after pasting a single sloka would show only the
+    original single sloka (Streamlit session-state persistence issue).
+    """
     st.markdown("### ✏️ Review & edit the extracted text")
     st.caption(
         "OCR is not always 100% accurate on Sanskrit. Fix any errors below "
@@ -265,11 +275,13 @@ def render_review_step(extracted: str) -> str | None:
         "swapped characters like र/द or missing viramas (्)."
     )
 
+    # Use a hash-based key so the widget resets on new extractions.
+    extraction_hash = str(hash(extracted))[:12]
     edited = st.text_area(
-        "Extracted Sanskrit text (edit if needed)",
+        f"Extracted Sanskrit text (edit if needed) — {len(extracted)} chars",
         value=extracted,
         height=240,
-        key="review_edit",
+        key=f"review_edit_{extraction_hash}",
     )
     return edited.strip() if edited.strip() else None
 
